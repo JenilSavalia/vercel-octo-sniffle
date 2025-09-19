@@ -22,8 +22,6 @@ export const getAllFiles = (folderPath) => {
 }
 
 
-console.log(getAllFiles("../output"))
-
 
 export function generate() {
     const subset = "123456789qwertyuiopasdfghjklzxcvbnm";
