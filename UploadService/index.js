@@ -1,29 +1,73 @@
-// import express from "express";
-// import cors from "cors";
-// import simpleGit from "simple-git";
-// import { generate } from "./utils/utils.js";
+import express from "express";
+import cors from "cors";
+import simpleGit from "simple-git";
+import { generate } from "./utils/utils.js";
+import { createClient } from "redis";
+import fs from 'fs-extra'
 import S3Uploader from './utils/s3-uploader.js';
+import { publishBuildStatus } from './utils/redisPublisher.js'
 
 const uploader = new S3Uploader();
-const dirResults = await uploader.uploadDirectory('./output', "7jakj");
+// const dirResults = await uploader.uploadDirectory('./output', "7jakj");
 
-console.log('Upload results:', dirResults);
+// console.log('Upload results:', dirResults);
 
-// const app = express();
-// app.use(cors())
-// app.use(express.json());
-
-// // POSTMAN
-// app.post("/deploy", async (req, res) => {
-//     const repoUrl = req.body.repoUrl;
-//     const id = generate(); // asd12
-//     await simpleGit().clone(repoUrl, `output/${id}`);
+// Create Redis client
+const redisClient = createClient();
+await redisClient.connect();
 
 
+const app = express();
+app.use(cors())
+app.use(express.json());
 
-//     res.json({
-//         id: id
-//     })
-// });
+app.post("/api/deploy", async (req, res) => {
+    const repoUrl = req.body.repoUrl;
 
-// app.listen(3000);
+    if (!repoUrl) {
+        return res.status(400).json({ error: "Missing repoUrl" });
+    }
+
+    const id = generate(); // Example: "asd12"
+    const targetDir = `output/${id}`;
+
+    try {
+        // Clone the repository into a subfolder
+        await simpleGit().clone(repoUrl, targetDir);
+
+        // Remove .git directory to avoid uploading unnecessary metadata
+        await fs.remove(`${targetDir}/.git`);
+
+        // Upload the specific output/id directory, not the whole output folder
+        const dirResults = await uploader.uploadDirectory(`./output/${id}`,id);
+        console.log(dirResults)
+        await publishBuildStatus(id);
+        res.json({ id });
+    } catch (error) {
+        console.error("Deploy error:", error);
+        res.status(500).json({ error: "Failed to deploy repository" });
+    }
+});
+
+
+// http://0.0.0.0:3000/api/status?id=build_12345
+app.get("/api/status", async (req, res) => {
+    const id = req.query.id;
+    if (!id) {
+        return res.status(400).json({ error: "Missing 'id' query parameter" });
+    }
+
+    try {
+        const response = await redisClient.hGet("status", id);
+        if (response === null) {
+            return res.status(404).json({ status: "not found" });
+        }
+
+        res.json({ status: response });
+    } catch (err) {
+        console.error("Redis error:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+})
+
+app.listen(3000);

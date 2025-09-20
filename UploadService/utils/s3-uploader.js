@@ -83,11 +83,12 @@ class S3Uploader {
 
     async uploadDirectory(dirPath, s3Prefix) {
         const files = this.getAllFiles(dirPath);
+        console.log(files)
         const results = [];
 
         for (const file of files) {
             const relativePath = path.relative(dirPath, file);
-            const s3Key = path.join(relativePath).replace(/\\/g, '/');
+            const s3Key = path.join(s3Prefix, relativePath).replace(/\\/g, '/');
 
             console.log(`Uploading ${relativePath}...`);
             const result = await this.uploadSingleFile(file, s3Key);
