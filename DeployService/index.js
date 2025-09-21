@@ -1,0 +1,64 @@
+import pkg from 'redis';
+const { createClient, commandOptions } = pkg;
+import cors from 'cors';
+// import { copyFinalDist, downloadS3Folder } from "./aws";
+// import { buildProject } from "./utils";
+import express from "express";
+const app = express();
+app.use(cors())
+app.use(express.json());
+
+
+
+async function main() {
+    const subscriber = createClient();
+    await subscriber.connect();
+
+    console.log("🚀 Worker listening for jobs on 'build-queue'...");
+
+    while (true) {
+        try {
+            const res = await subscriber.brPop(
+                'build-queue',
+                0 // 0 = block indefinitely until a value is available
+            );
+
+            if (res && res.element) {
+                const jobId = res.element;
+                console.log(`🛠️ Received job: ${jobId}`);
+
+                // Process the job
+                await handleJob(jobId);
+            }
+        } catch (error) {
+            console.error("❌ Error in worker loop:", error);
+            // Optional: Wait before retrying to avoid tight loop
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+    }
+}
+
+async function handleJob(id) {
+    // try {
+    //     // 1. Download the uploaded source from S3
+    //     await downloadS3Folder(id);
+
+    //     // 2. Build the project (this is your custom logic)
+    //     await buildProject(id);
+
+    //     // 3. Upload the build output to S3
+    //     await copyFinalDist(id);
+
+    //     console.log(`✅ Job ${id} completed`);
+    // } catch (error) {
+    //     console.error(`❌ Failed to process job ${id}:`, error);
+    //     // Optional: update status in Redis or retry logic here
+    // }
+    console.log("Handling JOB for ", id)
+}
+
+main();
+
+app.listen(3001, () => {
+    console.log("Listning on PORT 3001")
+});
