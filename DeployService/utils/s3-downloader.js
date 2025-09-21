@@ -109,5 +109,4 @@ async function downloadFromCloudFront(key, localDir) {
     }
 }
 
-// Install axios: npm install axios
-downloadS3Folder("qc26a");
+// downloadS3Folder("qc26a");

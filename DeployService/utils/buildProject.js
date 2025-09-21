@@ -28,6 +28,6 @@ export function buildProject(id) {
     });
 }
 
-buildProject("qc26a")
-    .then(result => console.log(result))
-    .catch(error => console.error(error));
+// buildProject("qc26a")
+//     .then(result => console.log(result))
+//     .catch(error => console.error(error));

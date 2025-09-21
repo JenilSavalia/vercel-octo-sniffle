@@ -1,18 +1,29 @@
 import pkg from 'redis';
 const { createClient, commandOptions } = pkg;
 import cors from 'cors';
-// import { copyFinalDist, downloadS3Folder } from "./aws";
-// import { buildProject } from "./utils";
 import express from "express";
+import S3Uploader from './utils/s3-uploader.js';
+import { buildProject } from './utils/buildProject.js'
+import { downloadS3Folder } from './utils/s3-downloader.js'
+import { createClient } from "redis";
+
+
+const uploader = new S3Uploader();
+// Create Redis client
+const redisClient = createClient();
+await redisClient.connect();
+
+
 const app = express();
 app.use(cors())
 app.use(express.json());
 
+const subscriber = createClient();
+await subscriber.connect();
+
 
 
 async function main() {
-    const subscriber = createClient();
-    await subscriber.connect();
 
     console.log("🚀 Worker listening for jobs on 'build-queue'...");
 
@@ -39,21 +50,29 @@ async function main() {
 }
 
 async function handleJob(id) {
-    // try {
-    //     // 1. Download the uploaded source from S3
-    //     await downloadS3Folder(id);
+    try {
+        //     // 1. Download the uploaded source from S3
+        await downloadS3Folder(id);
 
-    //     // 2. Build the project (this is your custom logic)
-    //     await buildProject(id);
+        //     // 2. Build the project (this is your custom logic)
+        await buildProject(id);
 
-    //     // 3. Upload the build output to S3
-    //     await copyFinalDist(id);
 
-    //     console.log(`✅ Job ${id} completed`);
-    // } catch (error) {
-    //     console.error(`❌ Failed to process job ${id}:`, error);
-    //     // Optional: update status in Redis or retry logic here
-    // }
+        //     // 3. Upload the build output to S3
+        const dirResults = await uploader.uploadDirectory(`./utils/downloads/${id}/dist`, `${id}/dist`);
+
+        // 4. Updating redis 
+
+        // Set the `id` status as "uploaded" in the "status" hash
+        await subscriber.hSet("status", id, "deployed");
+        console.log(`Set status of ${id} to "deployed"`);
+
+
+        console.log(`✅ Job ${id} completed`);
+
+    } catch (error) {
+        console.error(`❌ Failed to process job ${id}:`, error);
+    }
     console.log("Handling JOB for ", id)
 }
 
