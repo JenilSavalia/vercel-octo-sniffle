@@ -4,7 +4,6 @@ import path from "path";
 import dotenv from 'dotenv';
 dotenv.config();
 
-
 // CloudFront distribution URL for file downloads
 const CLOUDFRONT_BASE_URL = process.env.CLOUDFRONT_URL;
 
@@ -104,46 +103,8 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Test CloudFront connectivity
-// app.get('/test-cloudfront/:id?', async (req, res) => {
-//     try {
-//         const testId = req.params.id || 'test';
-//         const testPath = 'index.html';
-//         const testUrl = `${CLOUDFRONT_BASE_URL}/dist/${testId}/${testPath}`;
-
-//         console.log(`🧪 Testing CloudFront access: ${testUrl}`);
-
-//         const response = await axios({
-//             method: 'GET',
-//             url: testUrl,
-//             timeout: 10000,
-//             validateStatus: () => true // Don't throw on 4xx/5xx
-//         });
-
-//         res.json({
-//             success: response.status === 200,
-//             url: testUrl,
-//             status: response.status,
-//             statusText: response.statusText,
-//             contentType: response.headers['content-type'],
-//             contentLength: response.headers['content-length'],
-//             cacheControl: response.headers['cache-control'],
-//             lastModified: response.headers['last-modified'],
-//             etag: response.headers['etag']
-//         });
-
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             error: error.message,
-//             code: error.code,
-//             suggestion: 'Check CloudFront distribution and network connectivity'
-//         });
-//     }
-// });
-
-// Main route handler for serving files via CloudFront
-app.use( async (req, res) => {
+// Main route handler for serving ALL files from dist folder with SPA routing
+app.use(async (req, res) => {
     try {
         // Extract ID from subdomain
         const host = req.hostname;
@@ -165,111 +126,166 @@ app.use( async (req, res) => {
             });
         }
 
-        // Get and sanitize file path
+        // Get and sanitize file path - SERVE ALL FILES FROM DIST with SPA routing
         let filePath = req.path;
+        const originalPath = req.path;
 
-        // Default to index.html for root path or directories
-        if (filePath === '/' || filePath.endsWith('/')) {
-            filePath = filePath + 'index.html';
+        console.log(`🔍 Serving from dist folder for project ${id} - Original path: ${filePath}`);
+
+        // For SPA routing: detect if this is an asset request or route request
+        const isAssetRequest = filePath.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|json|xml|txt|pdf|zip|mp4|mp3|wav|webp|avif|eot|map|webmanifest)$/);
+
+        // SPA routing logic:
+        // 1. Root path or directories ending with / → serve index.html
+        // 2. Any path that doesn't look like an asset → serve index.html (SPA routing)
+        // 3. Actual assets → serve the asset file
+        if (filePath === '/' || filePath.endsWith('/') || (!isAssetRequest && !filePath.includes('.'))) {
+            filePath = 'index.html';
+            console.log(`📄 SPA routing detected for project ${id}, serving dist/${id}/index.html for path: ${originalPath}`);
+        } else {
+            // Remove leading slash and sanitize for actual files
+            filePath = sanitizePath(filePath.startsWith('/') ? filePath.substring(1) : filePath);
         }
 
-        // Remove leading slash and sanitize
-        filePath = sanitizePath(filePath.startsWith('/') ? filePath.substring(1) : filePath);
+        console.log(`🔍 Final file path: ${filePath}`);
+        console.log(`🎯 File type: ${path.extname(filePath) || 'no extension'}`);
 
-        // Construct CloudFront URL
+        // Construct CloudFront URL - CORRECTED: dist/{id}/{file} not {id}/dist/{file}
         const cloudFrontUrl = `${CLOUDFRONT_BASE_URL}/${id}/dist/${filePath}`;
 
-        console.log(`🌐 Fetching from CloudFront: ${cloudFrontUrl}`);
+        console.log(`🌐 Full CloudFront URL: ${cloudFrontUrl}`);
+        console.log(`📁 Serving from dist/${id}/ folder structure`);
 
-        // Fetch file from CloudFront using HTTP request
+        // Fetch ANY file type from CloudFront (HTML, CSS, JS, images, fonts, etc.)
         const response = await axios({
             method: 'GET',
             url: cloudFrontUrl,
-            responseType: 'arraybuffer', // Get binary data
-            timeout: 30000, // 30 second timeout
+            responseType: 'arraybuffer', // Handle all file types (binary + text)
+            timeout: 30000,
             headers: {
-                // Forward some headers from original request
                 'User-Agent': req.headers['user-agent'] || 'S3-Proxy-Server',
                 'Accept': req.headers['accept'] || '*/*',
                 'Accept-Encoding': req.headers['accept-encoding'] || 'gzip, deflate',
-                // Forward conditional headers for caching
                 ...(req.headers['if-none-match'] && { 'If-None-Match': req.headers['if-none-match'] }),
                 ...(req.headers['if-modified-since'] && { 'If-Modified-Since': req.headers['if-modified-since'] })
             }
         });
 
-        // Determine content type (CloudFront might not set it correctly)
+        // Determine content type for ALL file types
         const contentType = response.headers['content-type'] || getContentType(filePath);
 
-        // Set response headers
+        console.log(`✅ File found! Content-Type: ${contentType}`);
+
+        // Set response headers for ALL file types
         const headers = {
             'Content-Type': contentType,
             'Content-Length': response.headers['content-length'] || response.data.length
         };
 
-        // Forward caching headers from CloudFront
+        // Forward ALL caching headers from CloudFront
         if (response.headers['cache-control']) {
             headers['Cache-Control'] = response.headers['cache-control'];
         } else {
-            headers['Cache-Control'] = 'public, max-age=3600'; // Default 1 hour cache
+            // Different cache strategies for different file types
+            if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/)) {
+                headers['Cache-Control'] = 'public, max-age=31536000'; // 1 year for assets
+            } else {
+                headers['Cache-Control'] = 'public, max-age=3600'; // 1 hour for HTML
+            }
         }
 
-        if (response.headers['etag']) {
-            headers['ETag'] = response.headers['etag'];
-        }
+        if (response.headers['etag']) headers['ETag'] = response.headers['etag'];
+        if (response.headers['last-modified']) headers['Last-Modified'] = response.headers['last-modified'];
+        if (response.headers['content-encoding']) headers['Content-Encoding'] = response.headers['content-encoding'];
 
-        if (response.headers['last-modified']) {
-            headers['Last-Modified'] = response.headers['last-modified'];
-        }
-
-        if (response.headers['content-encoding']) {
-            headers['Content-Encoding'] = response.headers['content-encoding'];
-        }
-
-        // Set CORS headers if needed
+        // CORS for all files
         headers['Access-Control-Allow-Origin'] = '*';
 
         res.set(headers);
 
-        // Send the file
-        console.log(`✅ Served via CloudFront: dist/${id}/${filePath} (${contentType}, ${response.data.length} bytes)`);
+        // Send ANY file type from dist folder
+        console.log(`✅ Served: dist/${id}/${filePath} (${contentType}, ${response.data.length} bytes)`);
         res.send(Buffer.from(response.data));
 
     } catch (error) {
-        console.error(`❌ Error serving ${req.hostname}${req.path}:`, {
+        const originalPath = req.path;
+        const id = req.hostname.split('.')[0];
+        const filePath = originalPath === '/' ? 'index.html' : originalPath.substring(1);
+
+        console.error(`❌ Failed to serve dist/${id}/${filePath}:`, {
             message: error.message,
             status: error.response?.status,
             statusText: error.response?.statusText,
-            url: error.config?.url
+            url: error.config?.url,
+            expectedUrl: `${CLOUDFRONT_BASE_URL}/dist/${id}/${filePath}`
         });
 
         if (error.response) {
-            // HTTP error from CloudFront
             const status = error.response.status;
 
+            // For SPA routing: if file not found and it's not an asset, serve index.html
             if (status === 404) {
+                const isAssetRequest = originalPath.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|json|xml|txt|pdf|zip|mp4|mp3|wav|webp|avif|eot|map|webmanifest)$/);
+
+                if (!isAssetRequest && !originalPath.includes('.')) {
+                    console.log(`🔄 SPA fallback for project ${id}: serving dist/${id}/index.html for 404 route: ${originalPath}`);
+
+                    // Redirect to project-specific index.html for SPA routing
+                    try {
+                        const indexUrl = `${CLOUDFRONT_BASE_URL}/dist/${id}/index.html`;
+                        console.log(`📄 Fetching SPA fallback from: ${indexUrl}`);
+
+                        const indexResponse = await axios({
+                            method: 'GET',
+                            url: indexUrl,
+                            responseType: 'arraybuffer',
+                            timeout: 30000
+                        });
+
+                        res.set({
+                            'Content-Type': 'text/html; charset=utf-8',
+                            'Cache-Control': 'public, max-age=3600',
+                            'Access-Control-Allow-Origin': '*'
+                        });
+
+                        console.log(`✅ SPA fallback served for project ${id}: index.html for route ${originalPath}`);
+                        return res.send(Buffer.from(indexResponse.data));
+
+                    } catch (indexError) {
+                        console.error(`❌ Failed to serve index.html fallback for project ${id}:`, indexError.message);
+                    }
+                }
+
                 res.status(404).json({
-                    error: 'File not found',
-                    path: req.path,
-                    id: req.hostname.split('.')[0],
+                    error: 'File not found in dist folder',
+                    path: originalPath,
+                    projectId: id,
+                    distPath: `dist/${id}/${filePath}`,
                     cloudFrontUrl: error.config?.url,
-                    suggestion: 'Check if the file exists and was deployed correctly'
+                    expectedUrl: `${CLOUDFRONT_BASE_URL}/dist/${id}/${filePath}`,
+                    suggestions: [
+                        'Check if the file exists in your build output',
+                        'Verify the file was uploaded to S3',
+                        'For SPA routing, make sure index.html exists'
+                    ]
                 });
             } else if (status === 403) {
                 res.status(403).json({
                     error: 'Access forbidden',
-                    path: req.path,
+                    path: originalPath,
+                    projectId: id,
+                    distPath: `dist/${id}/${filePath}`,
                     cloudFrontUrl: error.config?.url,
+                    expectedUrl: `${CLOUDFRONT_BASE_URL}/dist/${id}/${filePath}`,
                     suggestions: [
                         'Check CloudFront distribution permissions',
-                        'Verify S3 bucket policy allows CloudFront access',
-                        'Check if CloudFront distribution is deployed'
+                        'Verify S3 bucket policy allows CloudFront access'
                     ]
                 });
             } else if (status >= 500) {
                 res.status(503).json({
                     error: 'Service unavailable',
-                    path: req.path,
+                    path: originalPath,
                     cloudFrontStatus: status,
                     suggestion: 'CloudFront or origin server error. Try again later.'
                 });
@@ -278,25 +294,22 @@ app.use( async (req, res) => {
                     error: 'CloudFront error',
                     status: status,
                     statusText: error.response.statusText,
-                    path: req.path
+                    path: originalPath
                 });
             }
         } else if (error.code === 'ECONNABORTED') {
-            // Timeout
             res.status(504).json({
                 error: 'Request timeout',
-                path: req.path,
+                path: originalPath,
                 suggestion: 'CloudFront request timed out. Try again.'
             });
         } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-            // Network error
             res.status(503).json({
                 error: 'Service unavailable',
                 message: 'Cannot connect to CloudFront',
                 suggestion: 'Check internet connection and CloudFront URL'
             });
         } else {
-            // Other errors
             res.status(500).json({
                 error: 'Internal server error',
                 message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
@@ -306,30 +319,6 @@ app.use( async (req, res) => {
     }
 });
 
-// Serve favicon.ico from root if no subdomain
-app.get('/favicon.ico', (req, res) => {
-    res.status(204).end(); // No Content
-});
-
-// 404 handler for unmatched routes
-app.use((req, res) => {
-    res.status(404).json({
-        error: 'Route not found',
-        path: req.path,
-        hostname: req.hostname,
-        note: 'Make sure to use subdomain format: project-id.domain.com'
-    });
-});
-
-// Error handler
-app.use((error, req, res, next) => {
-    console.error('❌ Unhandled error:', error);
-    res.status(500).json({
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
-    });
-});
-
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
@@ -337,5 +326,7 @@ app.listen(PORT, () => {
     console.log(`☁️  Serving files from CloudFront: ${CLOUDFRONT_BASE_URL}`);
     console.log(`🌐 Format: http://project-id.localhost:${PORT}/path/to/file`);
     console.log(`💡 Example: http://qc26a.localhost:${PORT}/index.html`);
-    console.log(`🧪 Test: http://localhost:${PORT}/test-cloudfront/qc26a`);
+    console.log(`🎯 SPA routing: All non-asset routes serve project-specific index.html`);
 });
+
+export default app;
