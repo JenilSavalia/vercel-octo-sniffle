@@ -75,10 +75,11 @@ app.get('/oauth/callback', async (req, res) => {
         });
 
         const profile = profileResponse.data;
+        console.log(profile)
 
         // Store the user in memory (or in a database)
         users[profile.id] = { access_token, profile };
-
+        console.log(users[profile.id])
         // Step 4: Generate a JWT token for this user
         const jwtToken = jwt.sign({ userId: profile.id }, JWT_SECRET, { expiresIn: '1h' });
         console.log(jwtToken)
@@ -135,7 +136,7 @@ async function createWebhook(access_token, repoOwner, repoName) {
         `https://api.github.com/repos/${repoOwner}/${repoName}/hooks`,
         {
             config: {
-                url: 'https://your-backend-service.com/webhook', // Your webhook handler URL
+                url: 'https://9kmfv9n2-3000.inc1.devtunnels.ms/webhook', // Your webhook handler URL
                 content_type: 'json',
             },
             events: ['push'],
@@ -149,6 +150,8 @@ async function createWebhook(access_token, repoOwner, repoName) {
     );
     console.log('Webhook created:', response.data);
 }
+
+// createWebhook("ACCESS TOKEN","jenilsavalia","SavaliaJenil-Portfolio")
 
 
 // Start the Express server

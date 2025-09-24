@@ -6,6 +6,7 @@ import { createClient } from "redis";
 import fs from 'fs-extra'
 import S3Uploader from './utils/s3-uploader.js';
 import { publishBuildStatus } from './utils/redisPublisher.js'
+import bodyParser from 'body-parser'
 
 const uploader = new S3Uploader();
 // const dirResults = await uploader.uploadDirectory('./output', "7jakj");
@@ -48,6 +49,36 @@ app.post("/api/deploy", async (req, res) => {
         res.status(500).json({ error: "Failed to deploy repository" });
     }
 });
+
+
+
+app.use('/webhook', bodyParser.json({ verify: rawBodySaver }));
+function rawBodySaver(req, res, buf, encoding) {
+    if (buf && buf.length) {
+        req.rawBody = buf.toString(encoding || 'utf8');
+    }
+}
+
+
+// Route to receive webhook POST events from GitHub
+app.post('/webhook', (req, res) => {
+    const event = req.headers['x-github-event'];
+
+
+    // Log the event type and payload
+    console.log(`📦 Received GitHub event: ${event}`);
+    console.log('Payload:', req.body);
+
+    // You can handle specific event types
+    if (event === 'push') {
+        const payload = req.body;
+        console.log(`🔔 Push to ${payload.repository.full_name} by ${payload.pusher.name}`);
+    }
+
+    // Respond to GitHub
+    res.status(200).send('Webhook received');
+});
+
 
 
 // http://0.0.0.0:3000/api/status?id=build_12345
