@@ -4,16 +4,19 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser');
+
 dotenv.config();
 
 
 const app = express();
-const port = 3001;  // Central Auth Service runs on port 3001
+const port = 3004;  // Central Auth Service runs on port 3001
 
 // GitHub OAuth app credentials
 const clientID = process.env.CLIENT_ID;
+console.log(clientID)
 const clientSecret = process.env.CLIENT_SECRET;
-const redirectUri = 'http://localhost:3001/oauth/callback';  // Callback URL
+const redirectUri = 'http://localhost:5173/redirect';  // Callback URL
 
 // JWT Secret for signing the tokens
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -21,6 +24,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // In-memory storage for users (use a database in production)
 let users = {};  // Temporarily storing user data (replace with DB)
 
+
+app.use(cookieParser());
 app.use(bodyParser.json());
 app.use(cors({
     origin: 'http://localhost:5173', // or your frontend URL
@@ -41,17 +46,20 @@ app.get('/oauth/callback', async (req, res) => {
 
     try {
         // Exchange the authorization code for an access token
-        const response = await axios.post('https://github.com/login/oauth/access_token', null, {
-            params: {
-                client_id: clientID,
-                client_secret: clientSecret,
+        const response = await axios.post(
+            "https://github.com/login/oauth/access_token",
+            {
+                client_id: process.env.CLIENT_ID,
+                client_secret: process.env.CLIENT_SECRET,
                 code,
                 redirect_uri: redirectUri,
             },
-            headers: {
-                'Accept': 'application/json',
-            },
-        });
+            {
+                headers: {
+                    Accept: "application/json",
+                },
+            }
+        );
 
         const { access_token } = response.data;
 
@@ -73,15 +81,16 @@ app.get('/oauth/callback', async (req, res) => {
 
         // Step 4: Generate a JWT token for this user
         const jwtToken = jwt.sign({ userId: profile.id }, JWT_SECRET, { expiresIn: '1h' });
-
+        console.log(jwtToken)
         res.cookie('token', jwtToken, {
             httpOnly: true,
-            secure: true, // Set to true if using HTTPS
+            secure: false, // Set to true if using HTTPS
             sameSite: 'Lax',
             maxAge: 60 * 60 * 1000, // 1 hour
         });
 
-        res.json({ user: profile });
+        // Redirect to frontend home after setting cookie
+        return res.redirect('http://localhost:5173/home');
     } catch (error) {
         console.error('Error exchanging code for access token:', error);
         res.status(500).send('Error during OAuth flow');
@@ -90,13 +99,14 @@ app.get('/oauth/callback', async (req, res) => {
 
 // Middleware to verify JWT token
 const verifyJWT = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1];  // "Bearer <token>"
+    // Read token from cookie instead of Authorization header
+    const token = req.cookies.token;
 
     if (!token) return res.status(403).send('Access denied: No token provided');
 
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).send('Access denied: Invalid or expired token');
-        req.user = decoded;  // Store user info in request
+        req.user = decoded;
         next();
     });
 };
@@ -104,9 +114,18 @@ const verifyJWT = (req, res, next) => {
 // Example: Protected route to access a resource (e.g., create webhook, upload)
 app.get('/checkCreds', verifyJWT, (req, res) => {
     // Protected route logic (only accessible with a valid JWT token)
-    res.send('This is a protected resource');
+    res.status(200).send('This is a protected resource');
 });
 
+
+app.post('/logout', (req, res) => {
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'Lax'
+    });
+    res.status(200).json({ message: 'Logged out successfully' });
+});
 
 
 
