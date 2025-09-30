@@ -319,7 +319,7 @@ app.use(async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.REQUEST_SERVICE_PORT;
 
 app.listen(PORT, () => {
     console.log(`🚀 CloudFront Proxy Server running on port ${PORT}`);

@@ -40,7 +40,7 @@ app.post("/api/deploy", async (req, res) => {
         await fs.remove(`${targetDir}/.git`);
 
         // Upload the specific output/id directory, not the whole output folder
-        const dirResults = await uploader.uploadDirectory(`./output/${id}`,id);
+        const dirResults = await uploader.uploadDirectory(`./output/${id}`, id);
         console.log(dirResults)
         await publishBuildStatus(id);
         res.json({ id });
@@ -101,4 +101,7 @@ app.get("/api/status", async (req, res) => {
     }
 })
 
-app.listen(3000);
+
+app.listen(3000, () => {
+    console.log(`🚀 Upload Server running on port 3000`);
+});

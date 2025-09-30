@@ -5,7 +5,6 @@ import express from "express";
 import S3Uploader from './utils/s3-uploader.js';
 import { buildProject } from './utils/buildProject.js'
 import { downloadS3Folder } from './utils/s3-downloader.js'
-import { createClient } from "redis";
 
 
 const uploader = new S3Uploader();
@@ -59,7 +58,7 @@ async function handleJob(id) {
 
 
         //     // 3. Upload the build output to S3
-        const dirResults = await uploader.uploadDirectory(`./utils/downloads/${id}/dist`, `${id}/dist`);
+        const dirResults = await uploader.uploadDirectory(`./downloads/${id}/dist`, `${id}/dist`);
 
         // 4. Updating redis 
 
@@ -75,6 +74,8 @@ async function handleJob(id) {
     }
     console.log("Handling JOB for ", id)
 }
+
+
 
 main();
 

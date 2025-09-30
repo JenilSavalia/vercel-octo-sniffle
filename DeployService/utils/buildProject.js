@@ -8,17 +8,18 @@ const __dirname = path.dirname(__filename);
 
 export function buildProject(id) {
     return new Promise((resolve, reject) => {
-        const child = exec(`cd ${path.join(__dirname, `downloads/${id}`)} && npm install && npm run build`)
-
-        child.stdout?.on('data', function(data) {
+        const buildPath = `D:/vercel-octo-sniffle/DeployService/downloads/${id}`;
+        const child = exec(`cd ${buildPath} && npm install && npm run build`)
+        console.log(buildPath)
+        child.stdout?.on('data', function (data) {
             console.log('stdout: ' + data);
         });
 
-        child.stderr?.on('data', function(data) {
+        child.stderr?.on('data', function (data) {
             console.log('stderr: ' + data);
         });
 
-        child.on('close', function(code) {
+        child.on('close', function (code) {
             if (code === 0) {
                 resolve("Build successful");
             } else {
@@ -28,6 +29,6 @@ export function buildProject(id) {
     });
 }
 
-// buildProject("qc26a")
+// buildProject("q1agk")
 //     .then(result => console.log(result))
 //     .catch(error => console.error(error));
