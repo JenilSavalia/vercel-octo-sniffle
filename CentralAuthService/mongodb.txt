@@ -1,0 +1,2 @@
+// Add this to your CentralAuthService/package.json dependencies:
+// "mongodb": "^5.7.0" (or latest)

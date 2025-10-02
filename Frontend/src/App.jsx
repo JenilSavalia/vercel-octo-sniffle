@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Home from './Home';
 
 const ProtectedRoute = ({ children }) => {
   const [authorized, setAuthorized] = useState(null);  // State to track authorization
@@ -23,9 +24,10 @@ const ProtectedRoute = ({ children }) => {
   return children;  // Return children (protected page) if authorized
 };
 
-const Home = () => {
-  return <h2>Welcome to Home Page</h2>
-};
+// const Home = () => {
+//   return <h2>Welcome to Home Page</h2>
+// };
+
 const Dashboard = () => {
   const navigate = useNavigate();
 
@@ -94,7 +96,7 @@ const App = () => {
           path="/home"
           element={
             <ProtectedRoute>
-            <Home />
+              <Home />
             </ProtectedRoute>
           }
         />

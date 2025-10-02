@@ -21,8 +21,22 @@ const redirectUri = 'http://localhost:5173/redirect';  // Callback URL
 // JWT Secret for signing the tokens
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// In-memory storage for users (use a database in production)
-let users = {};  // Temporarily storing user data (replace with DB)
+
+// Native MongoDB connection
+const { MongoClient } = require('mongodb');
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
+const mongoDbName = process.env.MONGO_DBNAME || 'central_auth_vercel_octa';
+let usersCollection;
+
+MongoClient.connect(mongoUri, { useUnifiedTopology: true })
+    .then(client => {
+        const db = client.db(mongoDbName);
+        usersCollection = db.collection('users');
+        console.log('Connected to MongoDB');
+    })
+    .catch(err => {
+        console.error('MongoDB connection error:', err);
+    });
 
 
 app.use(cookieParser());
@@ -32,12 +46,47 @@ app.use(cors({
     credentials: true               // 👈 Allow cookies to be sent
 }));
 
+
+// Middleware to verify JWT token
+const verifyJWT = (req, res, next) => {
+    // Read token from cookie instead of Authorization header
+    const token = req.cookies.token;
+
+    if (!token) return res.status(403).send('Access denied: No token provided');
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(403).send('Access denied: Invalid or expired token');
+        req.user = decoded;
+        next();
+    });
+};
+
 // Step 1: Redirect user to GitHub OAuth page for authentication
 app.get('/login', (req, res) => {
     const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientID}&redirect_uri=${redirectUri}&scope=repo`;
 
     // Redirect to GitHub OAuth page
     res.redirect(authUrl);
+});
+
+app.get('/my-repos', verifyJWT, async (req, res) => {
+    try {
+        if (!usersCollection) return res.status(500).json({ error: 'DB not ready' });
+    const userId = req.user.userId;
+    const user = await usersCollection.findOne({ githubId: userId });
+        if (!user || !user.access_token) {
+            return res.status(401).json({ error: 'No access token found' });
+        }
+        const ghRes = await axios.get('https://api.github.com/user/repos', {
+            headers: {
+                Authorization: `Bearer ${user.access_token}`,
+            },
+        });
+        res.json(ghRes.data);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch repos' });
+    }
 });
 
 // Step 2: Handle GitHub OAuth callback and exchange code for access token
@@ -77,9 +126,15 @@ app.get('/oauth/callback', async (req, res) => {
         const profile = profileResponse.data;
         console.log(profile)
 
-        // Store the user in memory (or in a database)
-        users[profile.id] = { access_token, profile };
-        console.log(users[profile.id])
+        // Store or update the user in MongoDB (free schema)
+        if (usersCollection) {
+            await usersCollection.updateOne(
+                { githubId: profile.id },
+                { $set: { githubId: profile.id, access_token, profile } },
+                { upsert: true }
+            );
+        }
+        console.log({ githubId: profile.id, access_token, profile });
         // Step 4: Generate a JWT token for this user
         const jwtToken = jwt.sign({ userId: profile.id }, JWT_SECRET, { expiresIn: '1h' });
         console.log(jwtToken)
@@ -98,19 +153,7 @@ app.get('/oauth/callback', async (req, res) => {
     }
 });
 
-// Middleware to verify JWT token
-const verifyJWT = (req, res, next) => {
-    // Read token from cookie instead of Authorization header
-    const token = req.cookies.token;
 
-    if (!token) return res.status(403).send('Access denied: No token provided');
-
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) return res.status(403).send('Access denied: Invalid or expired token');
-        req.user = decoded;
-        next();
-    });
-};
 
 // Example: Protected route to access a resource (e.g., create webhook, upload)
 app.get('/checkCreds', verifyJWT, (req, res) => {
