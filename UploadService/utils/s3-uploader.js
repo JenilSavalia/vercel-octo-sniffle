@@ -2,6 +2,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import fs from 'fs';
 import path from 'path';
+import { createClient } from "redis";
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -16,7 +17,7 @@ class S3Uploader {
         if (!this.bucketName) {
             throw new Error('Bucket name is required. Set S3_BUCKET_NAME environment variable or pass it to constructor.');
         }
-        console.log(process.env.S3_BUCKET_NAME)
+        // console.log(process.env.S3_BUCKET_NAME)
 
         // Validate other required configs
         if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
@@ -85,11 +86,15 @@ class S3Uploader {
         const files = this.getAllFiles(dirPath);
         console.log(files)
         const results = [];
+        const publisher = createClient();
+        await publisher.connect();
+
 
         for (const file of files) {
             const relativePath = path.relative(dirPath, file);
             const s3Key = path.join(s3Prefix, relativePath).replace(/\\/g, '/');
 
+            publisher.publish(`logs:${s3Prefix}`, `Uploading ${relativePath}...`);
             console.log(`Uploading ${relativePath}...`);
             const result = await this.uploadSingleFile(file, s3Key);
             results.push(result);

@@ -11,12 +11,14 @@ export async function publishBuildStatus(id) {
 
     // Set the `id` status as "uploaded" in the "status" hash
     await publisher.hSet("status", id, "uploaded");
+    publisher.publish(`logs:${id}`, `${id} : status uploaded`);
     console.log(`Set status of ${id} to "uploaded"`);
 
     // Disconnect from Redis after operations
     await publisher.quit();
   } catch (error) {
     console.error("Error while publishing:", error);
+    publisher.publish(`logs:${id}`, `${id} : "Error while publishing:", ${error}`);
   }
 }
 

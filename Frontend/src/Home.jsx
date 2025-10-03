@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+
 import SearchableDropdown from './Components/SearchableDropdown';
+import Logs from './Components/Logs';
 
 export default function Home() {
     const [repoUrl, setRepoUrl] = useState('');
@@ -142,10 +144,16 @@ export default function Home() {
                                     )}
                                 </div>
 
+
                                 {jobId && (
-                                    <p className="text-sm text-gray-500 mt-3">
-                                        Job ID: <span className="font-mono">{jobId}</span>
-                                    </p>
+                                    <>
+                                        <p className="text-sm text-gray-500 mt-3">
+                                            Job ID: <span className="font-mono">{jobId}</span>
+                                        </p>
+                                        <div className="mt-4">
+                                            <Logs uploadId={jobId} />
+                                        </div>
+                                    </>
                                 )}
 
                                 {status === 'deployed' && (

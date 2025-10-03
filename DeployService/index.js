@@ -36,12 +36,13 @@ async function main() {
             if (res && res.element) {
                 const jobId = res.element;
                 console.log(`🛠️ Received job: ${jobId}`);
-
+                subscriber.publish(`logs:${jobId}`, `Received job: ${jobId}`);
                 // Process the job
                 await handleJob(jobId);
             }
         } catch (error) {
             console.error("❌ Error in worker loop:", error);
+            subscriber.publish(`logs:${jobId}`, `❌ Error in worker loop: ${error}`);
             // Optional: Wait before retrying to avoid tight loop
             await new Promise((resolve) => setTimeout(resolve, 1000));
         }
@@ -58,19 +59,24 @@ async function handleJob(id) {
 
 
         //     // 3. Upload the build output to S3
-        const dirResults = await uploader.uploadDirectory(`./downloads/${id}/dist`, `${id}/dist`);
+        const dirResults = await uploader.uploadDirectory(`./downloads/${id}/dist`, `${id}/dist`, id);
 
         // 4. Updating redis 
 
         // Set the `id` status as "uploaded" in the "status" hash
         await subscriber.hSet("status", id, "deployed");
         console.log(`Set status of ${id} to "deployed"`);
+        subscriber.publish(`logs:${id}`, `${id}: deployed`);
 
 
         console.log(`✅ Job ${id} completed`);
+        subscriber.publish(`logs:${id}`, `✅ Job ${id} completed`);
+
 
     } catch (error) {
         console.error(`❌ Failed to process job ${id}:`, error);
+        subscriber.publish(`logs:${id}`, `❌ Failed to process job ${id}: ${error}`);
+
     }
     console.log("Handling JOB for ", id)
 }

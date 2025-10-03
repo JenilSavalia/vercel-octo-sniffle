@@ -7,22 +7,21 @@ const httpServer = createServer();
 
 const io = new Server(httpServer, { cors: { origin: "*" } });
 
-
 const redis = new Redis();
 
 
 
-async function simulateUpload(uploadId) {
-    redis.publish(`logs:${uploadId}`, "Cloning repo...");
-    await new Promise(r => setTimeout(r, 1000));
+// async function simulateUpload(uploadId) {
+//     redis.publish(`logs:${uploadId}`, "Cloning repo...");
+//     await new Promise(r => setTimeout(r, 1000));
 
-    redis.publish(`logs:${uploadId}`, "Uploading to S3...");
-    await new Promise(r => setTimeout(r, 1000));
+//     redis.publish(`logs:${uploadId}`, "Uploading to S3...");
+//     await new Promise(r => setTimeout(r, 1000));
 
-    redis.publish(`logs:${uploadId}`, "Upload completed ✅");
-}
+//     redis.publish(`logs:${uploadId}`, "Upload completed ✅");
+// }
 
-simulateUpload("abc123");
+// simulateUpload("abc123");
 
 
 

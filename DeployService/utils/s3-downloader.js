@@ -4,6 +4,9 @@ import path from "path";
 import { pipeline } from "stream/promises";
 import axios from "axios"; // For CloudFront downloads
 import dotenv from 'dotenv';
+import pkg from 'redis';
+const { createClient } = pkg;
+
 dotenv.config();
 
 // S3 client for API operations (list objects)
@@ -16,6 +19,10 @@ const s3Client = new S3Client({
     forcePathStyle: true // For bucket names with dots
 });
 
+const redisClient = createClient();
+await redisClient.connect();
+
+
 // CloudFront base URL for downloads
 const CLOUDFRONT_URL = process.env.CLOUDFRONT_URL;
 
@@ -27,6 +34,9 @@ export async function downloadS3Folder(
     localDir = "./downloads",
     bucketName = process.env.S3_BUCKET_NAME
 ) {
+    // Create Redis client
+
+    redisClient.publish(`logs:${prefix}`, `🚀 Starting download from s3://${bucketName}/${prefix}`);
     console.log(`🚀 Starting download from s3://${bucketName}/${prefix}`);
 
     try {
@@ -39,10 +49,12 @@ export async function downloadS3Folder(
         const listResponse = await s3Client.send(listCommand);
 
         if (!listResponse.Contents || listResponse.Contents.length === 0) {
+            redisClient.publish(`logs:${prefix}`, `📁 No files found with prefix: ${prefix}`);
             console.log(`📁 No files found with prefix: ${prefix}`);
             return { totalFiles: 0, successful: 0, failed: 0, results: [] };
         }
 
+        redisClient.publish(`logs:${prefix}`, `📂 Found ${listResponse.Contents.length} files to download`);
         console.log(`📂 Found ${listResponse.Contents.length} files to download`);
 
         const files = listResponse.Contents.filter(obj =>
@@ -54,9 +66,10 @@ export async function downloadS3Folder(
             if (!obj.Key) {
                 return { success: false, key: 'unknown', error: 'No key found' };
             }
-            return downloadFromCloudFront(obj.Key, localDir);
+            return downloadFromCloudFront(obj.Key, localDir, prefix);
         });
 
+        redisClient.publish(`logs:${prefix}`, `⏳ Downloading ${downloadPromises.length} files...`);
         console.log(`⏳ Downloading ${downloadPromises.length} files...`);
         const results = await Promise.all(downloadPromises);
 
@@ -64,13 +77,18 @@ export async function downloadS3Folder(
         const failed = results.filter(r => !r.success).length;
 
         console.log(`\n📊 Download Summary:`);
+        redisClient.publish(`logs:${prefix}`, `\n📊 Download Summary:`);
         console.log(`✅ Successful: ${successful}`);
+        redisClient.publish(`logs:${prefix}`, `✅ Successful: ${successful}`);
         console.log(`❌ Failed: ${failed}`);
+        redisClient.publish(`logs:${prefix}`, `❌ Failed: ${failed}`);
+
 
         return { totalFiles: results.length, successful, failed, results };
 
     } catch (error) {
         console.error('❌ Error listing S3 objects:', error);
+        redisClient.publish(`logs:${prefix}`, `❌ Error listing S3 objects : ${error}`);
         throw error;
     }
 }
@@ -78,7 +96,7 @@ export async function downloadS3Folder(
 /**
  * Download file from CloudFront using HTTP request
  */
-async function downloadFromCloudFront(key, localDir) {
+async function downloadFromCloudFront(key, localDir, prefix) {
     try {
         const localFilePath = path.join(localDir, key);
         const dirName = path.dirname(localFilePath);
@@ -87,9 +105,11 @@ async function downloadFromCloudFront(key, localDir) {
 
         // CloudFront URL
         const fileUrl = `${CLOUDFRONT_URL}/${key}`;
-        
+
         console.log(`⏳ Downloading from CloudFront: ${key}`);
-        
+        redisClient.publish(`logs:${prefix}`, `⏳ Downloading from CloudFront: ${key}`);
+
+
         // Download using axios
         const response = await axios({
             method: 'GET',
@@ -101,10 +121,12 @@ async function downloadFromCloudFront(key, localDir) {
         await pipeline(response.data, writeStream);
 
         console.log(`✅ Downloaded: ${key}`);
+        redisClient.publish(`logs:${prefix}`, `✅ Downloaded: ${key}`);
         return { success: true, key, localPath: localFilePath };
 
     } catch (error) {
         console.error(`❌ Error downloading ${key}:`, error.message);
+        redisClient.publish(`logs:${prefix}`, `❌ Error downloading ${key}: ${error.message}`);
         return { success: false, key, error: error.message };
     }
 }

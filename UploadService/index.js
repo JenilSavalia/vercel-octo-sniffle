@@ -30,22 +30,24 @@ app.post("/api/deploy", async (req, res) => {
     }
 
     const id = generate(); // Example: "asd12"
+    redisClient.publish(`logs:${id}`, `id generated : ${id}`);
     const targetDir = `output/${id}`;
 
     try {
         // Clone the repository into a subfolder
         await simpleGit().clone(repoUrl, targetDir);
-
-        // Remove .git directory to avoid uploading unnecessary metadata
+        redisClient.publish(`logs:${id}`, `Repository Cloned ${repoUrl}`);
+        // Remove .git directory to avoid   uploading unnecessary metadata
         await fs.remove(`${targetDir}/.git`);
 
         // Upload the specific output/id directory, not the whole output folder
         const dirResults = await uploader.uploadDirectory(`./output/${id}`, id);
-        console.log(dirResults)
+        // console.log(dirResults)
         await publishBuildStatus(id);
         res.json({ id });
     } catch (error) {
         console.error("Deploy error:", error);
+        redisClient.publish(`logs:${id}`, `Deploy error:, ${error}`);
         res.status(500).json({ error: "Failed to deploy repository" });
     }
 });

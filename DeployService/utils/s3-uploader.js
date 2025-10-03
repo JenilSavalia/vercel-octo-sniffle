@@ -3,6 +3,9 @@ import { Upload } from '@aws-sdk/lib-storage';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import pkg from 'redis';
+const { createClient } = pkg;
+
 dotenv.config();
 
 
@@ -81,16 +84,20 @@ class S3Uploader {
         return results;
     }
 
-    async uploadDirectory(dirPath, s3Prefix) {
+    async uploadDirectory(dirPath, s3Prefix, id) {
         const files = this.getAllFiles(dirPath);
         console.log(files)
         const results = [];
+        const redisClient = createClient();
+        await redisClient.connect();
+
 
         for (const file of files) {
             const relativePath = path.relative(dirPath, file);
             const s3Key = path.join(s3Prefix, relativePath).replace(/\\/g, '/');
 
             console.log(`Uploading ${relativePath}...`);
+            redisClient.publish(`logs:${id}`, `Uploading ${relativePath}...`);
             const result = await this.uploadSingleFile(file, s3Key);
             results.push(result);
         }
