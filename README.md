@@ -11,44 +11,38 @@ This platform provides a complete continuous deployment pipeline for static webs
 The project follows a microservices architecture with the following components:
 
 ```
-┌─────────────┐
-│   Frontend  │ ◄───── WebSocket (Live Logs)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────┐
-│  CentralAuthService │ (JWT-based Authentication)
-└──────────┬──────────┘
-           │
-    ┌──────┴──────┐
-    │             │
-    ▼             ▼
-┌─────────┐  ┌─────────────┐
-│ Upload  │  │   Request   │
-│ Service │  │   Service   │
-└────┬────┘  └──────┬──────┘
-     │              │
-     ▼              ▼
-┌─────────┐  ┌─────────────┐
-│  Redis  │  │   Deploy    │
-│ Streams │  │   Service   │
-│ (Queue) │  │             │
-└────┬────┘  └──────┬──────┘
-     │              │
-     │       ┌──────┴──────┐
-     │       │             │
-     │       ▼             ▼
-     │   ┌────────┐  ┌──────────┐
-     │   │ AWS S3 │  │CloudFront│
-     │   │Storage │  │   CDN    │
-     │   └────────┘  └──────────┘
-     │
-     └──────┬
-            ▼
-     ┌─────────────┐
-     │   Logging   │
-     │   Service   │ ───► WebSocket Stream
-     └─────────────┘
+                    ┌─────────────┐
+                    │   Frontend  │ ◄─── WebSocket (Live Logs)
+                    └──────┬──────┘
+                           │
+                           ▼
+                    ┌─────────────────────┐
+                    │  CentralAuthService │ (JWT-based Authentication)
+                    └──────────┬──────────┘
+                               │
+                    ┌──────────┴───────────┐
+                    │                      │
+                    ▼                      ▼
+            ┌───────────────┐      ┌──────────────┐
+            │ Upload Service│      │Request Service│
+            └───────┬───────┘      └──────┬───────┘
+                    │                     │
+                    ▼                     ▼
+            ┌───────────────┐      ┌─────────────┐
+            │ Redis Streams │      │ CloudFront  │
+            │    (Queue)    │      │     CDN     │
+            └───────┬───────┘      └──────┬──────┘
+                    │                     │
+                    ▼                     ▼
+            ┌───────────────┐         ┌────────┐
+            │ Deploy Service│────────►│ AWS S3 │
+            └───────┬───────┘         └────────┘
+                    │
+                    │ (Build Logs)
+                    ▼
+            ┌───────────────┐
+            │Logging Service│ ───► WebSocket Stream to Frontend
+            └───────────────┘
 ```
 
 ### Services
