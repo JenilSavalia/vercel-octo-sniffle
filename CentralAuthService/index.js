@@ -1,3 +1,4 @@
+
 const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
@@ -61,6 +62,9 @@ const verifyJWT = (req, res, next) => {
     });
 };
 
+
+
+
 // Step 1: Redirect user to GitHub OAuth page for authentication
 app.get('/login', (req, res) => {
     const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientID}&redirect_uri=${redirectUri}&scope=repo`;
@@ -72,12 +76,12 @@ app.get('/login', (req, res) => {
 app.get('/my-repos', verifyJWT, async (req, res) => {
     try {
         if (!usersCollection) return res.status(500).json({ error: 'DB not ready' });
-    const userId = req.user.userId;
-    const user = await usersCollection.findOne({ githubId: userId });
+        const userId = req.user.userId;
+        const user = await usersCollection.findOne({ githubId: userId });
         if (!user || !user.access_token) {
             return res.status(401).json({ error: 'No access token found' });
         }
-        const ghRes = await axios.get('https://api.github.com/user/repos', {
+        const ghRes = await axios.get(`https://api.github.com/users/${user.profile.login}/repos`, {
             headers: {
                 Authorization: `Bearer ${user.access_token}`,
             },
@@ -171,6 +175,37 @@ app.post('/logout', (req, res) => {
     res.status(200).json({ message: 'Logged out successfully' });
 });
 
+
+// Get all deployments for the authenticated user
+app.get('/deployments', verifyJWT, async (req, res) => {
+    try {
+        if (!usersCollection) return res.status(500).json({ error: 'DB not ready' });
+        const userId = req.user.userId;
+        const user = await usersCollection.findOne({ githubId: userId });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json({ deployments: user.deployments || [] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch deployments' });
+    }
+});
+
+// Get deployment details by jobid for the authenticated user
+app.get('/deployments/:jobid', verifyJWT, async (req, res) => {
+    try {
+        if (!usersCollection) return res.status(500).json({ error: 'DB not ready' });
+        const userId = req.user.userId;
+        const jobid = req.params.jobid;
+        const user = await usersCollection.findOne({ githubId: userId });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        const deployment = (user.deployments || []).find(dep => dep.jobid === jobid);
+        if (!deployment) return res.status(404).json({ error: 'Deployment not found' });
+        res.json({ deployment });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch deployment details' });
+    }
+});
 
 
 

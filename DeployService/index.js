@@ -25,6 +25,8 @@ await subscriber.connect();
 async function main() {
 
     console.log("🚀 Worker listening for jobs on 'build-queue'...");
+    // subscriber.publish(`logs:uppe3`, `🚀 Worker listening for jobs on 'build-queue'...`);
+
 
     while (true) {
         try {

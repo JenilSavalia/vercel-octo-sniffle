@@ -7,6 +7,9 @@ import fs from 'fs-extra'
 import S3Uploader from './utils/s3-uploader.js';
 import { publishBuildStatus } from './utils/redisPublisher.js'
 import bodyParser from 'body-parser'
+import { MongoClient } from 'mongodb'
+import cookieParser from 'cookie-parser';
+import jwt from "jsonwebtoken"
 
 const uploader = new S3Uploader();
 // const dirResults = await uploader.uploadDirectory('./output', "7jakj");
@@ -17,13 +20,48 @@ const uploader = new S3Uploader();
 const redisClient = createClient();
 await redisClient.connect();
 
+// const { MongoClient } = require('mongodb');
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
+const mongoDbName = process.env.MONGO_DBNAME || 'central_auth_vercel_octa';
+let usersCollection;
+
+MongoClient.connect(mongoUri, { useUnifiedTopology: true })
+    .then(client => {
+        const db = client.db(mongoDbName);
+        usersCollection = db.collection('users');
+        console.log('Connected to MongoDB');
+    })
+    .catch(err => {
+        console.error('MongoDB connection error:', err);
+    });
+
+
 
 const app = express();
-app.use(cors())
+app.use(cors({
+    origin: 'http://localhost:5173',
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
 
-app.post("/api/deploy", async (req, res) => {
+const verifyJWT = (req, res, next) => {
+    // Read token from cookie instead of Authorization header
+    const token = req.cookies.token;
+
+    if (!token) return res.status(403).send('Access denied: No token provided');
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(403).send('Access denied: Invalid or expired token');
+        req.user = decoded;
+        next();
+    });
+};
+
+app.post("/api/deploy", verifyJWT, async (req, res) => {
     const repoUrl = req.body.repoUrl;
+    const deploymentName = req.body.deploymentName;
+    const deploymentType = req.body.deploymentType;
 
     if (!repoUrl) {
         return res.status(400).json({ error: "Missing repoUrl" });
@@ -44,6 +82,32 @@ app.post("/api/deploy", async (req, res) => {
         const dirResults = await uploader.uploadDirectory(`./output/${id}`, id);
         // console.log(dirResults)
         await publishBuildStatus(id);
+
+        if (!usersCollection) return res.status(500).json({ error: 'DB not ready' });
+        const userId = req.user.userId;
+        const user = await usersCollection.findOne({ githubId: userId });
+
+
+        // Add deployment record to user
+        if (usersCollection) {
+            await usersCollection.updateOne(
+                { githubId: userId },
+                {
+                    $push: {
+                        deployments: {
+                            jobid: id,
+                            deploymentName: deploymentName,
+                            deploymentType: deploymentType,
+                            repo: repoUrl,
+                            projectId: null,
+                            logs: []
+                        }
+                    }
+                }
+            );
+        }
+
+
         res.json({ id });
     } catch (error) {
         console.error("Deploy error:", error);

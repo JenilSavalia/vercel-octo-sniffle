@@ -5,6 +5,7 @@ import Logs from './Components/Logs';
 
 export default function Home() {
     const [repoUrl, setRepoUrl] = useState('');
+    const [deploymentName, setDeploymentName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState('idle');
     const [statusMessage, setStatusMessage] = useState('');
@@ -52,7 +53,8 @@ export default function Home() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ repoUrl }),
+                body: JSON.stringify({ repoUrl, deploymentName }),
+                credentials: 'include',
             });
 
             const data = await response.json();
@@ -104,6 +106,19 @@ export default function Home() {
                         <div className="space-y-6">
                             <div>
                                 <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Deployment Name
+                                </label>
+                                <input
+                                    type="text"
+                                    id="repoUrl"
+                                    value={deploymentName || ""}
+                                    onChange={(e) => setDeploymentName(e.target.value)}
+                                    placeholder="vercel-octa-core"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 mb-2">
                                     Repository URL
                                 </label>
                                 <input
@@ -115,10 +130,9 @@ export default function Home() {
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                                 />
                             </div>
-
                             <button
                                 onClick={handleSubmit}
-                                disabled={isSubmitting || !(repoUrl || selectedRepo?.value)}
+                                disabled={isSubmitting || !deploymentName || !(repoUrl || selectedRepo?.value)}
                                 className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-200"
                             >
                                 {isSubmitting ? 'Submitting...' : 'Submit Repository'}
