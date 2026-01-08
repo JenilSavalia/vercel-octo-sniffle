@@ -8,6 +8,8 @@ This platform provides a complete continuous deployment pipeline for static webs
 
 ## 🏗️ Architecture
 
+<img width="1280" height="908" alt="image" src="https://github.com/user-attachments/assets/bfad281a-2686-4839-9a37-67b167eee78a" />
+
 The project follows a microservices architecture with the following components:
 
 ```
